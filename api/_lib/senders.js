@@ -44,14 +44,16 @@ export function newId() {
 export async function addSender({ email, appPass }) {
   const list = await getSenders();
   const id = newId();
+
   const enc = encryptIfPossible(appPass);
   const item = {
     id,
     email: email.trim(),
     appPass: enc,
     createdAt: new Date().toISOString(),
-    lastUsedAt: null
+    lastUsedAt: null,
   };
+
   list.push(item);
   await saveSenders(list);
   return { id, item };
@@ -59,46 +61,58 @@ export async function addSender({ email, appPass }) {
 
 export async function deleteSender(id) {
   const list = await getSenders();
-  const next = list.filter(s => s?.id !== id);
+  const next = list.filter((s) => s?.id !== id);
   const deleted = next.length !== list.length;
+
   if (!deleted) return { deleted: false };
+
   await saveSenders(next);
+
   const active = await getActiveSenderId();
   if (active === id) {
     await setActiveSenderId(null);
   }
+
   return { deleted: true };
 }
 
 export async function resolveSender({ senderId, senderEmail, senderAppPass }) {
   // Priority:
-  // 1) explicit senderId in request
-  // 2) explicit senderEmail+senderAppPass in request
-  // 3) active sender in KV
+  // 1) senderId (DB)
+  // 2) senderEmail + senderAppPass (request)
+  // 3) active sender (DB)
   // 4) default env GMAIL_USER/GMAIL_PASS
 
   if (senderId) {
     const list = await getSenders();
-    const found = list.find(s => s?.id === senderId);
+    const found = list.find((s) => s?.id === senderId);
     if (!found) throw new Error('sender_id not found');
+
     const pass = decryptIfNeeded(found.appPass);
     found.lastUsedAt = new Date().toISOString();
     await saveSenders(list);
+
     return { email: found.email, appPass: pass, source: 'sender_id', senderId: found.id };
   }
 
   if (senderEmail && senderAppPass) {
-    return { email: String(senderEmail).trim(), appPass: String(senderAppPass).trim(), source: 'request' };
+    return {
+      email: String(senderEmail).trim(),
+      appPass: String(senderAppPass).trim(),
+      source: 'request',
+    };
   }
 
   const activeId = await getActiveSenderId();
   if (activeId) {
     const list = await getSenders();
-    const found = list.find(s => s?.id === activeId);
+    const found = list.find((s) => s?.id === activeId);
+
     if (found) {
       const pass = decryptIfNeeded(found.appPass);
       found.lastUsedAt = new Date().toISOString();
       await saveSenders(list);
+
       return { email: found.email, appPass: pass, source: 'active_sender', senderId: found.id };
     }
   }
@@ -109,5 +123,7 @@ export async function resolveSender({ senderId, senderEmail, senderAppPass }) {
     return { email: envEmail, appPass: envPass, source: 'env_default' };
   }
 
-  throw new Error('No sender configured. Provide sender_id OR sender_email+sender_app_pass OR set active sender OR set env GMAIL_USER/GMAIL_PASS');
+  throw new Error(
+    'No sender configured. Provide sender_id OR sender_email+sender_app_pass OR set active sender OR set env GMAIL_USER/GMAIL_PASS'
+  );
 }
