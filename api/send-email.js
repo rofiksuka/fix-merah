@@ -36,7 +36,6 @@ export default async function handler(req, res) {
 
   let body = {};
   try {
-    // Vercel may pre-parse body for some runtimes; handle both.
     if (req.body && typeof req.body === 'object') body = req.body;
     else body = await parseJson(req);
   } catch (e) {
@@ -53,20 +52,35 @@ export default async function handler(req, res) {
     return json(res, 400, { ok: false, error: 'Missing to_email/subject/body' });
   }
 
-  // New: support stored senders
   const sender_id = body.sender_id || body.senderId;
   const sender_email = body.sender_email;
   const sender_app_pass = body.sender_app_pass;
 
   let sender;
   try {
+    console.log('[API] resolveSender:start', {
+      sender_id,
+      sender_email,
+      has_sender_app_pass: !!sender_app_pass
+    });
+
     sender = await resolveSender({
       senderId: sender_id,
       senderEmail: sender_email,
       senderAppPass: sender_app_pass
     });
+
+    console.log('[API] resolveSender:ok', {
+      email: sender?.email,
+      source: sender?.source,
+      senderId: sender?.senderId || null
+    });
   } catch (e) {
-    return json(res, 500, { ok: false, error: e.message });
+    console.error('[API] resolveSender:error', {
+      message: e.message,
+      stack: e.stack
+    });
+    return json(res, 500, { ok: false, phase: 'resolveSender', error: e.message });
   }
 
   const transporter = nodemailer.createTransport({
@@ -80,12 +94,41 @@ export default async function handler(req, res) {
     socketTimeout: 30000
   });
 
+  let info;
   try {
-    const info = await transporter.sendMail({
+    console.log('[API] sendMail:start', {
+      from: sender.email,
+      to: to_email,
+      subject
+    });
+
+    info = await transporter.sendMail({
       from: sender.email,
       to: to_email,
       subject,
       text
+    });
+
+    console.log('[API] sendMail:ok', { messageId: info.messageId });
+  } catch (e) {
+    console.error('[API] sendMail:error', {
+      message: e.message,
+      stack: e.stack,
+      code: e.code,
+      response: e.response,
+      responseCode: e.responseCode,
+      command: e.command
+    });
+    return json(res, 500, { ok: false, phase: 'sendMail', error: e.message });
+  }
+
+  let save_status = 'saved';
+  try {
+    console.log('[API] saveFixJob:start', {
+      fix_id,
+      number,
+      sender_email: sender.email,
+      message_id: info.messageId
     });
 
     await saveFixJob({
@@ -100,16 +143,23 @@ export default async function handler(req, res) {
       status_text: 'MENUNGGU BALASAN WHATSAPP'
     });
 
-    return json(res, 200, {
-      ok: true,
-      message: 'Email sent',
-      messageId: info.messageId,
-      fix_id,
-      number,
-      sender_source: sender.source,
-      sender_id: sender.senderId || null
-    });
+    console.log('[API] saveFixJob:ok', { fix_id });
   } catch (e) {
-    return json(res, 500, { ok: false, error: e.message });
+    save_status = 'skipped';
+    console.error('[API] saveFixJob:error', {
+      message: e.message,
+      stack: e.stack
+    });
   }
+
+  return json(res, 200, {
+    ok: true,
+    message: 'Email sent',
+    messageId: info.messageId,
+    fix_id,
+    number,
+    sender_source: sender.source,
+    sender_id: sender.senderId || null,
+    save_status
+  });
 }
