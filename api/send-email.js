@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { requireApiKey, json, onlyMethods } from './_lib/auth.js';
 import { resolveSender } from './_lib/senders.js';
+import { buildFixId, saveFixJob, normalizeNumber } from './_lib/fix-jobs.js';
 
 function normalizePass(p) {
   return String(p || '').replace(/\s+/g, '');
@@ -45,6 +46,8 @@ export default async function handler(req, res) {
   const to_email = body.to_email || body.to;
   const subject = body.subject || '';
   const text = body.body || body.text || '';
+  const number = normalizeNumber(body.number || body.phone || body.target_number || '');
+  const fix_id = body.fix_id || body.fixId || buildFixId('FYN');
 
   if (!to_email || !subject || !text) {
     return json(res, 400, { ok: false, error: 'Missing to_email/subject/body' });
@@ -85,10 +88,24 @@ export default async function handler(req, res) {
       text
     });
 
+    await saveFixJob({
+      fix_id,
+      number,
+      to_email,
+      sender_email: sender.email,
+      sender_id: sender.senderId || null,
+      subject,
+      message_id: info.messageId,
+      status: 'pending',
+      status_text: 'MENUNGGU BALASAN WHATSAPP'
+    });
+
     return json(res, 200, {
       ok: true,
       message: 'Email sent',
       messageId: info.messageId,
+      fix_id,
+      number,
       sender_source: sender.source,
       sender_id: sender.senderId || null
     });
