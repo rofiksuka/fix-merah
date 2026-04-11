@@ -7,6 +7,10 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function kvReady() {
+  return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+}
+
 function normalizeNumber(value) {
   return String(value || '')
     .trim()
@@ -40,6 +44,11 @@ export async function saveFixJob(job) {
     created_at: job.created_at || nowIso(),
     updated_at: nowIso()
   };
+
+  if (!kvReady()) {
+    return { ...normalized, storage: 'memoryless' };
+  }
+
   await kv.set(`${KEY_PREFIX}${fixId}`, normalized);
   if (normalized.number) {
     await kv.set(`${KEY_BY_NUMBER_PREFIX}${normalized.number}`, fixId);
@@ -48,11 +57,12 @@ export async function saveFixJob(job) {
 }
 
 export async function getFixJob(fixId) {
-  if (!fixId) return null;
+  if (!fixId || !kvReady()) return null;
   return await kv.get(`${KEY_PREFIX}${fixId}`);
 }
 
 export async function getFixJobByNumber(number) {
+  if (!kvReady()) return null;
   const normalized = normalizeNumber(number);
   if (!normalized) return null;
   const fixId = await kv.get(`${KEY_BY_NUMBER_PREFIX}${normalized}`);
@@ -61,6 +71,7 @@ export async function getFixJobByNumber(number) {
 }
 
 export async function updateFixJob(fixId, patch) {
+  if (!kvReady()) return null;
   const existing = await getFixJob(fixId);
   if (!existing) return null;
   return await saveFixJob({ ...existing, ...patch, fix_id: fixId });
