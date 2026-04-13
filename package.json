@@ -6,7 +6,7 @@
   "dependencies": {
     "@vercel/kv": "^3.0.0",
     "nodemailer": "^6.9.15",
-    "imapflow": "^1.0.181",
+    "imap": "^0.8.19",
     "mailparser": "^3.7.2"
   }
 }
