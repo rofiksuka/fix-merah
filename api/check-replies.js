@@ -11,7 +11,7 @@ const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 async function sendTelegramNotif(userId, number, fixId) {
   if (!TELEGRAM_BOT_TOKEN) return false;
   
-  const text = `â <b>NOMOR DIBALAS WHATSAPP!</b>\n\nNomor: <code>${number}</code>\nFix ID: <code>${fixId}</code>\n\nð Coba login WhatsApp sekarang.`;
+  const text = `Ã¢ÂÂ <b>NOMOR DIBALAS WHATSAPP!</b>\n\nNomor: <code>${number}</code>\nFix ID: <code>${fixId}</code>\n\nÃ°ÂÂÂ Coba login WhatsApp sekarang.`;
   
   try {
     await fetch(`${TELEGRAM_API}/sendMessage`, {
